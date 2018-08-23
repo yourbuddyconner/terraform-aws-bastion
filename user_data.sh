@@ -1,96 +1,98 @@
-#!/bin/bash -x
-yum -y update --security
+# #!/bin/bash -x
+# yum -y update --security
 
-##########################
-## ENABLE SSH RECORDING ##
-##########################
+# ##########################
+# ## ENABLE SSH RECORDING ##
+# ##########################
 
-# Create a new folder for the log files
-mkdir /var/log/bastion
+# # Create a new folder for the log files
+# mkdir /var/log/bastion
 
-# Allow ec2-user only to access this folder and its content
-chown ec2-user:ec2-user /var/log/bastion
-chmod -R 770 /var/log/bastion
-setfacl -Rdm other:0 /var/log/bastion
+# # Allow ec2-user only to access this folder and its content
+# chown ec2-user:ec2-user /var/log/bastion
+# chmod -R 770 /var/log/bastion
+# setfacl -Rdm other:0 /var/log/bastion
 
-# Make OpenSSH execute a custom script on logins
-echo -e "\\nForceCommand /usr/bin/bastion/shell" >> /etc/ssh/sshd_config
+# # Make OpenSSH execute a custom script on logins
+# echo -e "\\nForceCommand /usr/bin/bastion/shell" >> /etc/ssh/sshd_config
 
-# Block some SSH features that bastion host users could use to circumvent the solution
-# awk '!/AllowTcpForwarding/' /etc/ssh/sshd_config > temp && mv temp /etc/ssh/sshd_config
-# awk '!/X11Forwarding/' /etc/ssh/sshd_config > temp && mv temp /etc/ssh/sshd_config
-# echo "AllowTcpForwarding no" >> /etc/ssh/sshd_config
-# echo "X11Forwarding no" >> /etc/ssh/sshd_config
+# # Block some SSH features that bastion host users could use to circumvent the solution
+# # awk '!/AllowTcpForwarding/' /etc/ssh/sshd_config > temp && mv temp /etc/ssh/sshd_config
+# # awk '!/X11Forwarding/' /etc/ssh/sshd_config > temp && mv temp /etc/ssh/sshd_config
+# echo "AllowTcpForwarding yes" >> /etc/ssh/sshd_config
+# echo "GatewayPorts yes" >> /etc/ssh/sshd_config
 
-mkdir /usr/bin/bastion
+# # echo "X11Forwarding no" >> /etc/ssh/sshd_config
 
-cat > /usr/bin/bastion/shell << 'EOF'
+# mkdir /usr/bin/bastion
 
-# Check that the SSH client did not supply a command
-if [[ -z $SSH_ORIGINAL_COMMAND ]]; then
+# cat > /usr/bin/bastion/shell << 'EOF'
 
-  # The format of log files is /var/log/bastion/YYYY-MM-DD_HH-MM-SS_user
-  LOG_FILE="`date --date="today" "+%Y-%m-%d_%H-%M-%S"`_`whoami`"
-  LOG_DIR="/var/log/bastion/"
+# # Check that the SSH client did not supply a command
+# if [[ -z $SSH_ORIGINAL_COMMAND ]]; then
 
-  # Print a welcome message
-  echo ""
-  echo "NOTE: This SSH session will be recorded"
-  echo "AUDIT KEY: $LOG_FILE"
-  echo ""
+#   # The format of log files is /var/log/bastion/YYYY-MM-DD_HH-MM-SS_user
+#   LOG_FILE="`date --date="today" "+%Y-%m-%d_%H-%M-%S"`_`whoami`"
+#   LOG_DIR="/var/log/bastion/"
 
-  # I suffix the log file name with a random string. I explain why later on.
-  SUFFIX=`mktemp -u _XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX`
+#   # Print a welcome message
+#   echo ""
+#   echo "NOTE: This SSH session will be recorded"
+#   echo "AUDIT KEY: $LOG_FILE"
+#   echo ""
 
-  # Wrap an interactive shell into "script" to record the SSH session
-  script -qf --timing=$LOG_DIR$LOG_FILE$SUFFIX.time $LOG_DIR$LOG_FILE$SUFFIX.data --command=/bin/bash
+#   # I suffix the log file name with a random string. I explain why later on.
+#   SUFFIX=`mktemp -u _XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX`
 
-else
+#   # Wrap an interactive shell into "script" to record the SSH session
+#   script -qf --timing=$LOG_DIR$LOG_FILE$SUFFIX.time $LOG_DIR$LOG_FILE$SUFFIX.data --command=/bin/bash
 
-  # The "script" program could be circumvented with some commands (e.g. bash, nc).
-  # Therefore, I intentionally prevent users from supplying commands.
+# else
 
-  echo "This bastion supports interactive sessions only. Do not supply a command"
-  exit 1
+#   # The "script" program could be circumvented with some commands (e.g. bash, nc).
+#   # Therefore, I intentionally prevent users from supplying commands.
 
-fi
+#   echo "This bastion supports interactive sessions only. Do not supply a command"
+#   exit 1
 
-EOF
+# fi
 
-# Make the custom script executable
-chmod a+x /usr/bin/bastion/shell
+# EOF
 
-# Bastion host users could overwrite and tamper with an existing log file using "script" if
-# they knew the exact file name. I take several measures to obfuscate the file name:
-# 1. Add a random suffix to the log file name.
-# 2. Prevent bastion host users from listing the folder containing log files. This is done
-#    by changing the group owner of "script" and setting GID.
-chown root:ec2-user /usr/bin/script
-chmod g+s /usr/bin/script
+# # Make the custom script executable
+# chmod a+x /usr/bin/bastion/shell
 
-# 3. Prevent bastion host users from viewing processes owned by other users, because the log
-#    file name is one of the "script" execution parameters.
-mount -o remount,rw,hidepid=2 /proc
-awk '!/proc/' /etc/fstab > temp && mv temp /etc/fstab
-echo "proc /proc proc defaults,hidepid=2 0 0" >> /etc/fstab
+# # Bastion host users could overwrite and tamper with an existing log file using "script" if
+# # they knew the exact file name. I take several measures to obfuscate the file name:
+# # 1. Add a random suffix to the log file name.
+# # 2. Prevent bastion host users from listing the folder containing log files. This is done
+# #    by changing the group owner of "script" and setting GID.
+# chown root:ec2-user /usr/bin/script
+# chmod g+s /usr/bin/script
 
-# Restart the SSH service to apply /etc/ssh/sshd_config modifications.
-service sshd restart
+# # 3. Prevent bastion host users from viewing processes owned by other users, because the log
+# #    file name is one of the "script" execution parameters.
+# mount -o remount,rw,hidepid=2 /proc
+# awk '!/proc/' /etc/fstab > temp && mv temp /etc/fstab
+# echo "proc /proc proc defaults,hidepid=2 0 0" >> /etc/fstab
 
-############################
-## EXPORT LOG FILES TO S3 ##
-############################
+# # Restart the SSH service to apply /etc/ssh/sshd_config modifications.
+# service sshd restart
 
-cat > /usr/bin/bastion/sync_s3 << 'EOF'
+# ############################
+# ## EXPORT LOG FILES TO S3 ##
+# ############################
 
-# Copy log files to S3 with server-side encryption enabled.
-# Then, if successful, delete log files that are older than a day.
-LOG_DIR="/var/log/bastion/"
-aws s3 cp $LOG_DIR s3://${bucket_name}/logs/ --sse --region ${aws_region} --recursive && find $LOG_DIR* -mtime +1 -exec rm {} \\;
+# cat > /usr/bin/bastion/sync_s3 << 'EOF'
 
-EOF
+# # Copy log files to S3 with server-side encryption enabled.
+# # Then, if successful, delete log files that are older than a day.
+# LOG_DIR="/var/log/bastion/"
+# aws s3 cp $LOG_DIR s3://${bucket_name}/logs/ --sse --region ${aws_region} --recursive && find $LOG_DIR* -mtime +1 -exec rm {} \\;
 
-chmod 700 /usr/bin/bastion/sync_s3
+# EOF
+
+# chmod 700 /usr/bin/bastion/sync_s3
 
 #######################################
 ## SYNCHRONIZE USERS AND PUBLIC KEYS ##

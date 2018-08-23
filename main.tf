@@ -208,6 +208,7 @@ resource "aws_iam_instance_profile" "bastion_host_profile" {
 }
 
 resource "aws_launch_configuration" "bastion_launch_configuration" {
+  name_prefix                 = "${var.bastion_name}"
   image_id                    = "${lookup(var.bastion_amis, var.region)}"
   instance_type               = "t2.nano"
   associate_public_ip_address = "${var.associate_public_ip_address}"
@@ -227,6 +228,7 @@ resource "aws_launch_configuration" "bastion_launch_configuration" {
 }
 
 resource "aws_autoscaling_group" "bastion_auto_scaling_group" {
+  name                 = "${var.bastion_name}-asg"
   launch_configuration = "${aws_launch_configuration.bastion_launch_configuration.name}"
   max_size             = "${var.bastion_instance_count}"
   min_size             = "${var.bastion_instance_count}"

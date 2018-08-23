@@ -32,6 +32,11 @@ variable "vpc_id" {
   description = "VPC id were we'll deploy the bastion"
 }
 
+variable "bastion_name" {
+  type = "string"
+  description = "Name of the bastion. ex: Bastion-Dev"
+}
+
 variable "bastion_host_key_pair" {
   description = "Select the key pair to use to launch the bastion host"
 }
